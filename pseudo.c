@@ -696,15 +696,31 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 					pseudo_debug(PDBGF_FILE, "inode mismatch for '%s' -- old one was marked for deletion.\n",
 						msg->path);
 				} else {
-					pseudo_diag("path mismatch [%d link%s]: ino %llu db '%s' req '%s'.\n",
-						msg->nlink,
-						msg->nlink == 1 ? "" : "s",
-						(unsigned long long) msg_header.ino,
-						path_by_ino ? path_by_ino : "no path",
-						msg->path);
+					if (msg->nlink > 1) {
+						/* For hard-links there are many potential races
+						 * where the path may not yet exist in the
+						 * database but we find an inode match on the
+						 * linked file. */
+						int flags = PDBGF_FILE | PDBGF_VERBOSE;
+						pseudo_debug(flags, "path mismatch [%d link%s]: ino %llu db '%s' req '%s'.\n",
+							msg->nlink,
+							msg->nlink == 1 ? "" : "s",
+							(unsigned long long) msg_header.ino,
+							path_by_ino ? path_by_ino : "no path",
+							msg->path);
+					} else {
+						pseudo_diag("path mismatch [%d link%s]: ino %llu db '%s' req '%s'.\n",
+							msg->nlink,
+							msg->nlink == 1 ? "" : "s",
+							(unsigned long long) msg_header.ino,
+							path_by_ino ? path_by_ino : "no path",
+							msg->path);
+					}
 					found_ino = 0;
-					msg->result = RESULT_ABORT;
-					goto op_exit;
+					if (msg->nlink == 1) {
+						msg->result = RESULT_ABORT;
+						goto op_exit;
+					}
 				}
 			}
 		} else {
